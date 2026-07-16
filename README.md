@@ -34,7 +34,7 @@ Arquitectura jerárquica en árbol: un switch núcleo centraliza el tráfico de 
           PC0, PC1   PC2, PC3  PC4, PC5      PC6, PC7
 ```
 
-*(Ver captura: `01-topologia-general.png`)*
+![Topología general de la red](01-topologia-general.png)
 
 ## 🧮 Diseño de direccionamiento (VLSM)
 
@@ -53,7 +53,7 @@ Bloque de red de partida: **192.168.0.0/19** (8192 direcciones), calculado a par
 
 Todos los cálculos fueron realizados manualmente y verificados posteriormente con `ipcalc` en Linux.
 
-*(Ver captura: `02-ipcalc-verificacion.png`)*
+![Verificación VLSM con ipcalc](02-ipcalc-verificacion.png)
 
 ## ⚙️ Configuración implementada
 
@@ -81,7 +81,7 @@ Sub-interfaz dedicada por cada VLAN sobre una única interfaz física (`GigabitE
 | Gi0/0.60 | CCTV | 192.168.22.129 |
 | Gi0/0.70 | SERVIDORES | 192.168.22.161 |
 
-*(Ver captura: `03-router-show-ip-interface-brief.png`)*
+![Sub-interfaces del router activas](03-router-show-ip-interface-brief.png)
 
 ## ✅ Verificación y pruebas realizadas
 
@@ -91,7 +91,14 @@ Sub-interfaz dedicada por cada VLAN sobre una única interfaz física (`GigabitE
 | Ping PC0 → PC1 (misma VLAN) | 4/4 recibidos | Comunicación intra-VLAN a través del switch de acceso |
 | Ping PC0 (VLAN 10) → PC2 (VLAN 20) | 3/4 recibidos, TTL=127 | Routing inter-VLAN funcional (el TTL decrementado en 1 confirma el salto por el router) |
 
-*(Ver capturas: `04-ping-mismo-gateway.png`, `05-ping-misma-vlan.png`, `06-ping-entre-vlans.png`)*
+**Ping al gateway:**
+![Ping PC0 a gateway](04-ping-mismo-gateway.png)
+
+**Ping dentro de la misma VLAN:**
+![Ping PC0 a PC1](05-ping-misma-vlan.png)
+
+**Ping entre VLANs distintas (routing inter-VLAN):**
+![Ping PC0 a PC2 entre VLANs](06-ping-entre-vlans.png)
 
 ## 🛠️ Herramientas utilizadas
 
