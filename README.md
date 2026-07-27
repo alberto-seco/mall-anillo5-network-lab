@@ -1,8 +1,8 @@
 # 🏬 Mall Anillo 5 — Diseño y Segmentación de Red con VLANs
 
 > ⚠️ **Proyecto en desarrollo activo.**
-> **Fase actual completada:** diseño VLSM, configuración de VLANs, trunking y routing inter-VLAN (router-on-a-stick), verificado con pruebas reales de conectividad.
-> **Próximos pasos:** ACLs de seguridad entre VLANs, servidor DHCP con DHCP Relay, documentación de hardening.
+> **Fase actual completada:** diseño VLSM, configuración de VLANs, trunking, routing inter-VLAN (router-on-a-stick) y ACLs de seguridad entre VLANs — todo verificado con pruebas reales de conectividad.
+> **Próximos pasos:** VLAN de invitados (WiFi), servidor DHCP con DHCP Relay, documentación de hardening.
 
 ## 📖 Contexto del proyecto
 
@@ -100,6 +100,68 @@ Sub-interfaz dedicada por cada VLAN sobre una única interfaz física (`GigabitE
 **Ping entre VLANs distintas (routing inter-VLAN):**
 ![Ping PC0 a PC2 entre VLANs](06-ping-entre-vlans.png)
 
+## 🔒 Seguridad — ACLs entre VLANs
+
+Una vez verificado que el routing inter-VLAN funcionaba, se aplicaron **Listas de Control de Acceso (ACL extendidas)** en el Router0 para restringir la comunicación entre VLANs según reglas de negocio realistas, en lugar de dejar toda la red completamente abierta.
+
+### Reglas de negocio definidas
+
+| Origen | Destino | ¿Permitido? | Motivo |
+|---|---|---|---|
+| P1, P2, P3 (locales) | ADMIN, CCTV, SERVIDORES | ❌ No | Cada tienda es una empresa independiente, sin relación con la gestión interna del mall |
+| P1, P2, P3 (locales) | entre sí | ❌ No | Las tiendas no tienen motivo para verse entre ellas |
+| WIFI (invitados) | Todo lo interno (P1, P2, P3, ADMIN, CCTV, SERVIDORES) | ❌ No | Los visitantes solo deben tener salida a internet |
+| ADMIN | CCTV, SERVIDORES | ✅ Sí | El personal de gestión del mall necesita supervisar cámaras y administrar servidores |
+| Cualquiera | Internet | ✅ Sí | Regla final `permit ip any any` |
+
+### Cálculo de wildcard masks
+
+Las ACLs de Cisco usan wildcard masks en lugar de máscaras de subred estándar (funcionan de forma invertida: 0 = debe coincidir, 1 = no importa). Se calcularon restando cada máscara a 255.255.255.255:
+
+| VLAN | Red | Máscara | Wildcard mask |
+|---|---|---|---|
+| P1 | 192.168.8.0 | 255.255.252.0 | 0.0.3.255 |
+| P2 | 192.168.12.0 | 255.255.252.0 | 0.0.3.255 |
+| P3 | 192.168.16.0 | 255.255.252.0 | 0.0.3.255 |
+| ADMIN | 192.168.22.0 | 255.255.255.128 | 0.0.0.127 |
+| CCTV | 192.168.22.128 | 255.255.255.224 | 0.0.0.31 |
+| SERVIDORES | 192.168.22.160 | 255.255.255.252 | 0.0.0.3 |
+| WIFI | 192.168.0.0 | 255.255.248.0 | 0.0.7.255 |
+
+### Implementación
+
+Se creó una única ACL extendida (**access-list 100**) con 21 reglas de denegación específicas más una regla final de permiso general, aplicada en modo **entrante (`in`)** sobre las sub-interfaces de origen con restricciones (Gi0/0.10, Gi0/0.20, Gi0/0.30):
+
+```
+access-list 100 deny ip 192.168.8.0 0.0.3.255 192.168.22.0 0.0.0.127
+access-list 100 deny ip 192.168.8.0 0.0.3.255 192.168.22.128 0.0.0.31
+access-list 100 deny ip 192.168.8.0 0.0.3.255 192.168.22.160 0.0.0.3
+[...]
+access-list 100 permit ip any any
+```
+
+```
+interface GigabitEthernet0/0.10
+ ip access-group 100 in
+```
+
+![Listado completo de la ACL 100](07-acl-show-access-list.png)
+
+![ACL aplicada en la sub-interfaz de P1](08-acl-verificacion-interfaz.png)
+
+### Verificación con pruebas reales
+
+| Prueba | Resultado | Qué demuestra |
+|---|---|---|
+| Ping PC0 (P1) → 192.168.22.2 (ADMIN) | 100% perdido, "Destination host unreachable" | La ACL bloquea correctamente el tráfico hacia VLANs restringidas |
+| Ping PC0 (P1) → 192.168.8.1 (su propio gateway) | 4/4 recibidos | La ACL no afecta al tráfico legítimo permitido |
+
+**Ping bloqueado (P1 → ADMIN):**
+![Ping bloqueado por la ACL](09-ping-bloqueado-por-acl.png)
+
+**Ping permitido (P1 → su gateway):**
+![Ping permitido al gateway](10-ping-permitido-gateway.png)
+
 ## 🛠️ Herramientas utilizadas
 
 - **Cisco Packet Tracer** — simulación de la topología y configuración de dispositivos.
@@ -108,12 +170,13 @@ Sub-interfaz dedicada por cada VLAN sobre una única interfaz física (`GigabitE
 
 ## 📌 Próximos pasos (roadmap)
 
-- [ ] Configurar **ACLs** para restringir tráfico entre VLANs según reglas de negocio (ej. Invitados sin acceso a Servidores/CCTV, Locales sin acceso a Administración).
+- [x] Configurar **ACLs** para restringir tráfico entre VLANs según reglas de negocio (ej. Invitados sin acceso a Servidores/CCTV, Locales sin acceso a Administración).
+- [ ] Montar la **VLAN de invitados (WiFi)** en switches (actualmente solo diseñada en el VLSM) y aplicarle su ACL correspondiente.
 - [ ] Implementar **servidor DHCP** con **DHCP Relay** para reparto automático de IPs entre VLANs.
 - [ ] Añadir documentación de hardening y buenas prácticas de seguridad en switches (port-security, DTP desactivado, etc.).
 - [ ] Migrar la topología a **GNS3** para integración con máquinas reales (ej. Wazuh SIEM) y tráfico de ataque real.
 
 ## 👤 Autor
 
-Alberto — Técnico en Administración de Sistemas Informáticos en Red (ASIR), orientación Blue Team/SOC.
+Alberto — Técnico en Administración de Sistemas Informáticos en Red (ASIR).
 [GitHub](https://github.com/alberto-seco)
